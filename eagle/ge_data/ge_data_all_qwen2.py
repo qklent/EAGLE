@@ -16,7 +16,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 
 
-modelname="/home/lyh/weights/hf/qwen2chat/7B"
+modelname="Qwen/Qwen2.5-1.5B-Instruct"
 
 
 
@@ -38,7 +38,7 @@ def build_dataset_rank(
         tokenizer, split="train",
         select=None,
 ):
-    ds = load_dataset('json', data_files="/home/lyh/data/hf/Shargpt/ShareGPT_V4.3_unfiltered_cleaned_split.json")
+    ds = load_dataset("Vikhrmodels/GrandMaster-PRO-MAX") # load_dataset('json', data_files="/home/lyh/data/hf/Shargpt/ShareGPT_V4.3_unfiltered_cleaned_split.json")
     ds = ds['train']
     ds = ds.shuffle(seed=42)
     ds1 = ds.select(range(args.start, args.end))
@@ -55,22 +55,12 @@ def build_dataset_rank(
         for i in range(len(examples['id'])):
             messages = [
                 {"role": "system",
-                 "content": "You are a helpful assistant."},
+                 "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
             ]
-            convroles=["user","assistant"]
-            roles = {"human": "user", "gpt": "assistant"}
-            source= examples['conversations'][i]
-            if roles[source[0]["from"]] != "user":
-                # Skip the first one if it is not from human
-                source = source[1:]
-            for j, sentence in enumerate(source):
-                role = roles[sentence["from"]]
-                assert role == convroles[j % 2], f"{i}"
-                # if sentence["from"]=="gpt":
-                #     sentence["value"]=" "+sentence["value"]
-                messages.append(
-                    {"role": role, "content": sentence["value"]}
-                )
+            conv = examples["conversation"][i]
+            if conv[0]["role"] != "system":
+                conv = messages + conv
+            
             conversation=tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
@@ -90,14 +80,11 @@ def build_dataset_rank(
 
             sep = "<|im_end|>\n<|im_start|>assistant\n"
 
-
-
             sep2="<|im_end|>\n<|im_start|>user\n"
             turns = conversation.split(sep2)
 
             turns[1]=turns[0]+sep2+turns[1]
             turns=turns[1:]
-
 
             cur_len = 1
             loss_mask[:cur_len] = 0
@@ -119,15 +106,11 @@ def build_dataset_rank(
                 cur_len += turn_len
                 cur_len += 5
 
-
             loss_mask[cur_len:] = 0
-
-
 
             new_examples["conversation"].append(conversation)
             new_examples["input_ids"].append(input_ids[None,:])
             new_examples["loss_mask"].append(loss_mask[None,:])
-
         return new_examples
 
     ds1 = ds1.map(
